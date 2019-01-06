@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rock Paper Scissors</title>
+  <style>
+  html {
+    margin: 0px;
+    height: 100%;
+  }
+  body {
+    margin: 0px;
+    min-height: 100%;
+  }
+  
+  
+</style>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+  <script type="text/javascript" charset="utf-8">
+    var socket = io.connect('http://%%CONNECTTO%%/rpslobbie');
+
+    // Socket events:
+    socket.on('connect', function() {
+        console.log('socket.id: ', socket.id, ' connected');
+        requestColor();
+    });
+
+    socket.on('connect_error', (error) => {
+      console.log('Could not connect to socket');
+      console.log(error);
+    });
+
+    socket.on('connect_timeout', (timeout) => {
+      console.log('Socket connection timed out');
+      console.log(timeout);
+    });
+
+    socket.on('error', (error) => {
+      console.log('Socket connection error');
+      console.log(error);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('socket.id: ', socket.id, ' disconnected');
+      console.log(reason);
+    });
+
+    // server events:
+    //socket.on('newColor', function(r,g,b) {
+        //console.log('server says newColor', r,g,b);
+        //document.body.style.backgroundColor = 'rgb(' + r + ',' + g + ',' + b + ')';
+    //});
+
+    //socket.on('requestedColor', function(id, r,g,b) {
+        //if (socket.id=='/colorlobbie#'+id){
+//          console.log('server says requestedColor',r,g,b);
+          //document.getElementById('R').value=r;
+          //document.getElementById('G').value=g;
+          //document.getElementById('B').value=b;
+        //}
+    //});
+
+    // client events:
+    //function requestColor() {
+//      console.log('client says requestColor');
+      //socket.emit('requestColor');
+    //}
+
+//    function setColor() {
+      //r=document.getElementById('R').value;
+      //g=document.getElementById('G').value;
+      //b=document.getElementById('B').value;
+      //console.log('client says setColor', r,g,b);
+      //socket.emit('setColor', r,g,b);
+    //}
+
+//    function triggerColor() {
+      //console.log('client says triggerColor');
+      //socket.emit('triggerColor');
+    //}
+
+    // document events:
+    //document.getElementById('R').addEventListener("mouseup", function (evt) {
+//      setColor();
+    //});
+	
+//	document.getElementById('G').addEventListener("mouseup", function (evt) {
+      //setColor();
+    //});
+//	
+//	document.getElementById('B').addEventListener("mouseup", function (evt) {
+      //setColor();
+    //});
+//
+    //document.body.addEventListener("click", function (evt) {
+//      triggerColor();
+    //});
+
+  </script>
+</body>
+</html>
