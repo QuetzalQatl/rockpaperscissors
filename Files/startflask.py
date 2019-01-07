@@ -44,10 +44,7 @@ OLDSTATE={}
 for key in STATE:
 	OLDSTATE[key]=STATE[key]
 
-FlaskSecretKey='186758961935679815389671589246247245747235994992999696'
-
-	
-
+FlaskSecretKey=os.urandom(512)
 		
 # initialize Flask
 app = Flask(__name__)
