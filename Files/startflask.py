@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, join_room, leave_room, emit, send
 from urllib.request import urlopen
+
 #from codenames import game
 import time
 import random
@@ -34,8 +35,8 @@ STATE['rightname']='The Right'
 STATE['leftname']='The Left'
 STATE['rightwon']=0
 STATE['leftwon']=0
-STATE['lefthand']='waitingforconnection' # or 'pregame' 'notready' 'ready' or 'rock' or 'paper' or 'scissors'
-STATE['righthand']='waitingforconnection' # or 'pregame' 'notready' 'ready' or 'rock' or 'paper' or 'scissors'
+STATE['lefthand']='No Connection' # or 'Setup' or 'Rock' or 'Paper' or 'Scissors'
+STATE['righthand']='No Connection' # or 'Setup' or 'Rock' or 'Paper' or 'Scissors'
 STATE['result']='' # messages to the users
 
 OLDSTATE={}
@@ -60,9 +61,8 @@ def checkState():
 			changed=True
 			break
 	if changed:
-		print ("stateChanged ... transmitting")
 		jasonstate= json.dumps(STATE)
-		print (str(jasonstate))
+		#print (str(jasonstate))
 		socketio.emit('stateChanged', (str(jasonstate)), namespace='/rpslobbie')
 		for key in STATE:
 			OLDSTATE[key]=STATE[key]
@@ -136,28 +136,27 @@ def app_rps():
 def on_Choice(side, choice):
 	if STATE['gamestate']=='waitingforplayers' or STATE['gamestate']=='gamerunning' or STATE['gamestate']=='showingwinner':
 		if (CLIENTS[request.sid]=='LEFT' and side=='Left') or (CLIENTS[request.sid]=='RIGHT' and side=='Right'):
-			print (side, choice)
 			if choice=='Rock' or choice=='Paper' or choice=='Scissors':
+				
 				if side=='Left':
 					CHOICE['LEFT']=choice
 					STATE['lefthand']='Ready'
-					print ("STATE['righthand']", STATE['righthand'])
-					if STATE['righthand'] in ['pregame' ,'Rock' ,'Paper' ,'Scissors']:
+					if STATE['righthand'] in ['Setup' ,'Rock' ,'Paper' ,'Scissors']:
 						STATE['righthand']='Waiting'
 						if STATE['gamestate']=='showingwinner':
 							STATE['rightwon']=0
 							STATE['leftwon']=0
-					print ("STATE['righthand']", STATE['righthand'])
+							
 				elif side=='Right':
 					CHOICE['RIGHT']=choice
 					STATE['righthand']='Ready'
-					print ("STATE['lefthand']", STATE['lefthand'])
-					if STATE['lefthand'] in ['pregame' ,'Rock' ,'Paper' ,'Scissors']:
+					if STATE['lefthand'] in ['Setup' ,'Rock' ,'Paper' ,'Scissors']:
 						STATE['lefthand']='Waiting'
 						if STATE['gamestate']=='showingwinner':
 							STATE['rightwon']=0
 							STATE['leftwon']=0
-					print ("STATE['lefthand']", STATE['lefthand'])
+				
+				# check both ready
 				if STATE['lefthand']=='Ready' and STATE['righthand']=='Ready':
 					if STATE['gamestate']=='showingwinner':
 						STATE['result']=''
@@ -191,6 +190,8 @@ def on_Choice(side, choice):
 							STATE['result']='Paper < Scissors'
 						else:
 							STATE['result']='Scissors = Scissors'
+				
+				# check for winner			
 				if STATE['rightwon']>=STATE['goalscore']:
 					STATE['gamestate']='showingwinner'
 					STATE['result']=STATE['rightname']+' Wins!!!'
@@ -198,6 +199,7 @@ def on_Choice(side, choice):
 					STATE['gamestate']='showingwinner'
 					STATE['result']=STATE['leftname']+' Wins!!!'
 				checkState()
+	print (request.sid,side, 'has chosen')
 	
 @socketio.on('setRightName', namespace='/rpslobbie')
 def on_setRightName(name):
@@ -212,7 +214,6 @@ def on_setRightName(name):
 				print ('ignoring zero length name')
 			if len(newname)!=len(name):
 				socketio.emit('noGoodName', (request.sid,STATE['rightname'],STATE['leftname']), namespace='/rpslobbie')
-				
 
 @socketio.on('setLeftName', namespace='/rpslobbie')
 def on_setLeftName(name):
@@ -274,9 +275,9 @@ def on_connect():
 	currentSocketId = request.sid
 	CLIENTS[currentSocketId]=getSide()
 	if CLIENTS[currentSocketId]=='RIGHT':
-		STATE['righthand']='pregame'
+		STATE['righthand']='Setup'
 	elif CLIENTS[currentSocketId]=='LEFT':
-		STATE['lefthand']='pregame'
+		STATE['lefthand']='Setup'
 	checkState()
 
 @socketio.on('disconnect', namespace='/rpslobbie')
@@ -284,9 +285,9 @@ def on_disconnect():
 	print('Client '+request.sid+' disconnected')
 	currentSocketId = request.sid
 	if CLIENTS[currentSocketId]=='RIGHT':
-		STATE['righthand']='waitingforconnection'
+		STATE['righthand']='No Connection'
 	elif CLIENTS[currentSocketId]=='LEFT':
-		STATE['lefthand']='waitingforconnection'
+		STATE['lefthand']='No Connection'
 	CLIENTS.pop(currentSocketId, None)
 	checkState()
 
@@ -295,13 +296,14 @@ if __name__ == '__main__':
 		PORT=abs(int(os.getenv('PORT')))
 	except:
 		pass
-	LANIP=os.getenv('LANIP', '192.168.99.100')
+	LANIP=os.getenv('LANIP', LANIP)
 	WANIP=getWideIpAdres()
 	print ()
 	print ("Rock Paper Scissors")
-	print ("v0.02")
+	print ("v0.03")
 	print ("localIP="+localIP)
 	print ("LANIP="+LANIP)
 	print ("WANIP="+WANIP)
 	print ("PORT="+str(PORT))
+	print ()
 	socketio.run(app, debug=False, port=PORT, host="0.0.0.0")
