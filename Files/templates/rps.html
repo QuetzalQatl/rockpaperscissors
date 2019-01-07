@@ -4,27 +4,94 @@
   <meta charset="UTF-8">
   <title>Rock Paper Scissors</title>
   <style>
-  html {
-    margin: 0px;
-    height: 100%;
-  }
-  body {
-    margin: 0px;
-    min-height: 100%;
-  }
-  
-  
+	html {
+		margin: 0px;
+		height: 100%;
+	}
+	body {
+		margin: 0px;
+		min-height: 100%;
+	}
+	.boxtitle {
+		width:98%;
+		height:30px;
+		position:fixed;
+		margin-left:10px; 
+		margin-top:10px; 
+		top:0px;
+		left:0px;
+	}
+	.box {
+		width:98%;
+		height:30px;
+		position:fixed;
+		margin-left:10px; 
+		margin-top:10px; 
+		top:90px;
+		left:0px;
+	}
+	
 </style>
 </head>
 <body>
+<table class="boxtitle">
+    <tr>
+        <td><input type="text" id="LeftName" value="The Left" readonly="true">
+        </td>
+		<td><input type="text" id="Result" value="Waiting..." readonly="true">
+		</td>
+        <td><input type="text" id="RightName" value="The Right" readonly="true">
+        </td>
+    </tr>
+    <tr>
+        <td><input type="text" id="LeftScore" value="0" readonly="true">
+        </td>
+		<td><input type="text" id="GoalScore" value="3" readonly="true">
+		</td>
+        <td><input type="text" id="RightScore" value="0" readonly="true">
+        </td>
+    </tr>
+</table>
+<table class="box">
+    <tr>
+        <td> <button type="button" id="LeftRock">Rock</button> 
+        </td>
+		<td>
+		</td>
+        <td>
+        </td>
+		<td> <button type="button" id="RightRock">Rock</button> 
+        </td>
+    </tr>
+    <tr>
+        <td> <button type="button" id="LeftPaper">Paper</button> 
+        </td>
+		<td><input type="text" id="LeftHandState" value=" " readonly="true">
+		</td>
+        <td><input type="text" id="RightHandState" value=" " readonly="true">
+        </td>
+		<td> <button type="button" id="RightPaper">Paper</button> 
+        </td>
+    </tr>
+    <tr>
+        <td> <button type="button" id="LeftScissors">Scissors</button> </td>
+		<td>
+		</td>
+        <td>
+        </td>
+		<td> <button type="button" id="RightScissors">Scissors</button> </td>
+        </td>
+    </tr>
+</table>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
   <script type="text/javascript" charset="utf-8">
     var socket = io.connect('http://%%CONNECTTO%%/rpslobbie');
-
+	var SIDE='none';
+	var STATE= null;
     // Socket events:
     socket.on('connect', function() {
         console.log('socket.id: ', socket.id, ' connected');
-        requestColor();
+        requestSide();
     });
 
     socket.on('connect_error', (error) => {
@@ -48,56 +115,331 @@
     });
 
     // server events:
-    //socket.on('newColor', function(r,g,b) {
-        //console.log('server says newColor', r,g,b);
-        //document.body.style.backgroundColor = 'rgb(' + r + ',' + g + ',' + b + ')';
-    //});
+    socket.on('stateChanged', function(state) {
+		STATE = JSON.parse(state); 
+		console.log('server says stateChanged', STATE);
+		alterState();
+    });
 
-    //socket.on('requestedColor', function(id, r,g,b) {
-        //if (socket.id=='/colorlobbie#'+id){
-//          console.log('server says requestedColor',r,g,b);
-          //document.getElementById('R').value=r;
-          //document.getElementById('G').value=g;
-          //document.getElementById('B').value=b;
-        //}
-    //});
+    socket.on('requestedSide', function(id, side, state) {
+        if (socket.id=='/rpslobbie#'+id){
+		  SIDE=side;
+		  STATE = JSON.parse(state); 
+		  console.log('server says requestedSide',SIDE);
+		  alterState();
+        }
+    });
+	
+	socket.on('noGoodGoalScore', function(id, goodscore) {
+		if (socket.id=='/rpslobbie#'+id){
+			console.log('server says noGoodGoalScore, got this instead: ', goodscore);
+			STATE.goalscore=goodscore;
+			document.getElementById('GoalScore').value=STATE.goalscore;
+		}
+    });
 
+	socket.on('noGoodName', function(id, goodRightName, goodLeftName) {
+		if (socket.id=='/rpslobbie#'+id){
+			console.log('server says noGoodName, got this instead: ', goodRightName,goodLeftName);
+			STATE.rightname=goodRightName;
+			document.getElementById('RightName').value=STATE.rightname;
+			STATE.leftname=goodLeftName;
+			document.getElementById('LeftName').value=STATE.leftname;
+		}
+    });
+	
     // client events:
-    //function requestColor() {
-//      console.log('client says requestColor');
-      //socket.emit('requestColor');
-    //}
-
-//    function setColor() {
-      //r=document.getElementById('R').value;
-      //g=document.getElementById('G').value;
-      //b=document.getElementById('B').value;
-      //console.log('client says setColor', r,g,b);
-      //socket.emit('setColor', r,g,b);
-    //}
-
-//    function triggerColor() {
-      //console.log('client says triggerColor');
-      //socket.emit('triggerColor');
-    //}
+    function requestSide() {
+      console.log('client says requestSide');
+      socket.emit('requestSide');
+    }
 
     // document events:
-    //document.getElementById('R').addEventListener("mouseup", function (evt) {
-//      setColor();
-    //});
+    document.getElementById('RightName').addEventListener("keyup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers'){
+				if (SIDE=='RIGHT'){
+					socket.emit('setRightName', document.getElementById('RightName').value);
+				}
+			}
+			if (STATE.gamestate == 'showingwinner'){
+				if (SIDE=='RIGHT'){
+					socket.emit('setRightName', document.getElementById('RightName').value);
+				}
+			}
+		}
+    });
 	
-//	document.getElementById('G').addEventListener("mouseup", function (evt) {
-      //setColor();
-    //});
-//	
-//	document.getElementById('B').addEventListener("mouseup", function (evt) {
-      //setColor();
-    //});
-//
-    //document.body.addEventListener("click", function (evt) {
-//      triggerColor();
-    //});
+    document.getElementById('LeftName').addEventListener("keyup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers'){
+				if (SIDE=='LEFT'){
+					socket.emit('setLeftName', document.getElementById('LeftName').value);
+				}
+			}
+			if (STATE.gamestate == 'showingwinner'){
+				if (SIDE=='LEFT'){
+					socket.emit('setLeftName', document.getElementById('LeftName').value);
+				}
+			}
+		}
+    });
+	
+    document.getElementById('GoalScore').addEventListener("keyup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers'){
+				if (SIDE=='RIGHT'){
+					var gs=document.getElementById('GoalScore').value;
+					if (gs.length>0){
+						socket.emit('setGoalScore', gs);			
+					}
+				}
+			}
+			if (STATE.gamestate == 'showingwinner'){
+				if (SIDE=='RIGHT'){
+					var gs=document.getElementById('GoalScore').value;
+					if (gs.length>0){
+						socket.emit('setGoalScore', gs);			
+					}
+				}
+			}
+		}
+    });
+	
+	document.getElementById('LeftRock').addEventListener("mouseup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers' || STATE.gamestate == 'showingwinner'){
+				if (SIDE=='LEFT'){
+					document.getElementById('LeftName').readOnly=true;
+					socket.emit('Choice', 'Left', 'Rock');
+					console.log('LeftRock pressed');
+				}
+			}
+			if (STATE.gamestate == 'gamerunning'){
+				if (SIDE=='LEFT'){
+					if (document.getElementById('LeftHandState').value!='Ready'){
+						document.getElementById('LeftHandState').value='Ready'
+						socket.emit('Choice', 'Left', 'Rock');
+						console.log('LeftRock pressed');
+					}
+				}
+			}
+		}
+    });
 
+	document.getElementById('LeftPaper').addEventListener("mouseup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers' || STATE.gamestate == 'showingwinner'){
+				if (SIDE=='LEFT'){
+					document.getElementById('LeftName').readOnly=true;
+					socket.emit('Choice', 'Left', 'Paper');
+					console.log('LeftPaper pressed');
+				}
+			}
+			if (STATE.gamestate == 'gamerunning'){
+				if (SIDE=='LEFT'){
+					if (document.getElementById('LeftHandState').value!='Ready'){
+						document.getElementById('LeftHandState').value='Ready'
+						socket.emit('Choice', 'Left', 'Paper');
+						console.log('LeftPaper pressed');
+					}
+				}
+			}
+		}
+    });
+
+	document.getElementById('LeftScissors').addEventListener("mouseup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers' || STATE.gamestate == 'showingwinner'){
+				if (SIDE=='LEFT'){
+					document.getElementById('LeftName').readOnly=true;
+					socket.emit('Choice', 'Left',  'Scissors');
+					console.log('LeftScissors pressed');
+				}
+			}
+			if (STATE.gamestate == 'gamerunning'){
+				if (SIDE=='LEFT'){
+					if (document.getElementById('LeftHandState').value!='Ready'){
+						document.getElementById('LeftHandState').value='Ready'
+						socket.emit('Choice', 'Left', 'Scissors');
+						console.log('LeftScissors pressed');
+					}
+				}
+			}
+		}
+    });
+
+	document.getElementById('RightRock').addEventListener("mouseup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers' || STATE.gamestate == 'showingwinner'){
+				if (SIDE=='RIGHT'){
+					document.getElementById('RightName').readOnly=true;
+					document.getElementById('GoalScore').readOnly=true;
+					socket.emit('Choice', 'Right', 'Rock');
+					console.log('RightRock pressed');
+				}
+			}
+			if (STATE.gamestate == 'gamerunning'){
+				if (SIDE=='RIGHT'){
+					if (document.getElementById('RightHandState').value!='Ready'){
+						document.getElementById('RightHandState').value='Ready'
+						socket.emit('Choice', 'Right', 'Rock');
+						console.log('RightRock pressed');
+					}
+				}
+			}
+		}
+    });
+
+	document.getElementById('RightPaper').addEventListener("mouseup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers' || STATE.gamestate == 'showingwinner'){
+				if (SIDE=='RIGHT'){
+					document.getElementById('RightName').readOnly=true;
+					document.getElementById('GoalScore').readOnly=true;
+					socket.emit('Choice', 'Right', 'Paper');
+					console.log('RightPaper pressed');
+				}
+			}
+			if (STATE.gamestate == 'gamerunning'){
+				if (SIDE=='RIGHT'){
+					if (document.getElementById('RightHandState').value!='Ready'){
+						document.getElementById('RightHandState').value='Ready'
+						socket.emit('Choice', 'Right', 'Paper');
+						console.log('RightPaper pressed');
+					}
+				}
+			}
+		}
+    });
+
+	document.getElementById('RightScissors').addEventListener("mouseup", function (evt) {
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers' || STATE.gamestate == 'showingwinner'){
+				if (SIDE=='RIGHT'){
+					document.getElementById('RightName').readOnly=true;
+					document.getElementById('GoalScore').readOnly=true;
+					socket.emit('Choice', 'Right', 'Scissors');
+					console.log('RightScissors pressed');
+				}
+			}
+			if (STATE.gamestate == 'gamerunning'){
+				if (SIDE=='RIGHT'){
+					if (document.getElementById('RightHandState').value!='Ready'){
+						document.getElementById('RightHandState').value='Ready'
+						socket.emit('Choice', 'Right', 'Scissors');
+						console.log('RightScissors pressed');
+					}
+				}
+			}
+		}
+    });
+
+	function alterState(){
+		if (STATE != null){
+			if (STATE.gamestate == 'waitingforplayers'){
+				console.log('STATE.gamestate == waitingforplayers');
+				if (SIDE=='RIGHT'){
+					document.getElementById('GoalScore').readOnly=false;
+					document.getElementById('RightName').readOnly=false;
+					if (STATE.leftname!=document.getElementById('LeftName').value){
+						document.getElementById('LeftName').value=STATE.leftname;
+					}
+				} 
+				if (SIDE=='LEFT'){
+					document.getElementById('LeftName').readOnly=false;
+					if (STATE.rightname!=document.getElementById('RightName').value){
+						document.getElementById('RightName').value=STATE.rightname;
+					}
+					if (STATE.goalscore!=document.getElementById('GoalScore').value){
+						document.getElementById('GoalScore').value=STATE.goalscore;
+					}
+				}
+				if (SIDE=='OBSERVER'){
+					if (STATE.rightname!=document.getElementById('RightName').value){
+						document.getElementById('RightName').value=STATE.rightname;
+					}
+					if (STATE.goalscore!=document.getElementById('GoalScore').value){
+						document.getElementById('GoalScore').value=STATE.goalscore;
+					}
+					if (STATE.leftname!=document.getElementById('LeftName').value){
+						document.getElementById('LeftName').value=STATE.leftname;
+					}
+				}
+				// for all:
+				if (STATE.leftname!=document.getElementById('LeftScore').value){
+					document.getElementById('LeftScore').value=STATE.leftwon;
+				}
+				if (STATE.leftname!=document.getElementById('RightScore').value){
+					document.getElementById('RightScore').value=STATE.rightwon;
+				}
+				if (STATE.leftname!=document.getElementById('Result').value){
+					document.getElementById('Result').value=STATE.result;
+				}
+				if (STATE.leftname!=document.getElementById('RightHandState').value){
+					document.getElementById('RightHandState').value=STATE.righthand;
+				}
+				if (STATE.leftname!=document.getElementById('LeftHandState').value){
+					document.getElementById('LeftHandState').value=STATE.lefthand;
+				}
+			}  else if (STATE.gamestate == 'gamerunning') {
+				console.log('STATE.gamestate == gamerunning');
+				console.log(STATE);
+				document.getElementById('RightScore').value=STATE.rightwon;
+				document.getElementById('LeftScore').value=STATE.leftwon;
+				document.getElementById('Result').value=STATE.result;
+				document.getElementById('RightHandState').value=STATE.righthand;
+				document.getElementById('LeftHandState').value=STATE.lefthand;
+			} else if (STATE.gamestate == 'showingwinner') {
+				console.log('STATE.gamestate == showingwinner');
+				console.log(STATE);
+				if (SIDE=='RIGHT'){
+					document.getElementById('GoalScore').readOnly=false;
+					document.getElementById('RightName').readOnly=false;
+					if (STATE.leftname!=document.getElementById('LeftName').value){
+						document.getElementById('LeftName').value=STATE.leftname;
+					}
+				} 
+				if (SIDE=='LEFT'){
+					document.getElementById('LeftName').readOnly=false;
+					if (STATE.rightname!=document.getElementById('RightName').value){
+						document.getElementById('RightName').value=STATE.rightname;
+					}
+					if (STATE.goalscore!=document.getElementById('GoalScore').value){
+						document.getElementById('GoalScore').value=STATE.goalscore;
+					}
+				}
+				if (SIDE=='OBSERVER'){
+					if (STATE.rightname!=document.getElementById('RightName').value){
+						document.getElementById('RightName').value=STATE.rightname;
+					}
+					if (STATE.goalscore!=document.getElementById('GoalScore').value){
+						document.getElementById('GoalScore').value=STATE.goalscore;
+					}
+					if (STATE.leftname!=document.getElementById('LeftName').value){
+						document.getElementById('LeftName').value=STATE.leftname;
+					}
+				}
+				// for all:
+				if (STATE.leftname!=document.getElementById('LeftScore').value){
+					document.getElementById('LeftScore').value=STATE.leftwon;
+				}
+				if (STATE.leftname!=document.getElementById('RightScore').value){
+					document.getElementById('RightScore').value=STATE.rightwon;
+				}
+				if (STATE.leftname!=document.getElementById('Result').value){
+					document.getElementById('Result').value=STATE.result;
+				}
+				if (STATE.leftname!=document.getElementById('RightHandState').value){
+					document.getElementById('RightHandState').value=STATE.righthand;
+				}
+				if (STATE.leftname!=document.getElementById('LeftHandState').value){
+					document.getElementById('LeftHandState').value=STATE.lefthand;
+				}
+			}
+		}
+	}
   </script>
+  
 </body>
 </html>

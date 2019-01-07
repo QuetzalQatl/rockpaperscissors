@@ -8,22 +8,64 @@ import traceback
 import socket
 import sys
 import os
+import json
 
 #this program needs:
 #pip install flask flask-socketio eventlet
 
-PORT=5000
+
+PORT=5000 # default, can be set at startup by setting the environment variable 'PORT'
+LANIP='192.168.99.100' # default, can be set at startup by setting the environment variable 'LANIP'
+
+#characters allowed in names:
+allowed='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_(){}[]<>!?.,`;:=+-*&^%$#@~ '
+maxnamelen=20
+
+localIP='127.0.0.1'
+WANIP=''
+CLIENTS = {} # dict to track active rooms
+CHOICE={}
+CHOICE['LEFT']='None'
+CHOICE['RIGHT']='None'
+STATE={}
+STATE['gamestate']='waitingforplayers' # or 'gamerunning' or 'showingwinner'
+STATE['goalscore']=3
+STATE['rightname']='The Right'
+STATE['leftname']='The Left'
+STATE['rightwon']=0
+STATE['leftwon']=0
+STATE['lefthand']='waitingforconnection' # or 'pregame' 'notready' 'ready' or 'rock' or 'paper' or 'scissors'
+STATE['righthand']='waitingforconnection' # or 'pregame' 'notready' 'ready' or 'rock' or 'paper' or 'scissors'
+STATE['result']='' # messages to the users
+
+OLDSTATE={}
+
+for key in STATE:
+	OLDSTATE[key]=STATE[key]
+
 FlaskSecretKey='186758961935679815389671589246247245747235994992999696'
 
-CLIENTS = {} # dict to track active rooms
-localIP='127.0.0.1'
-LANIP='192.168.99.100'
-WANIP=''
+	
 
+		
 # initialize Flask
 app = Flask(__name__)
 app.config['SECRET_KEY'] = FlaskSecretKey
 socketio = SocketIO(app)
+
+def checkState():
+	changed=False
+	for key in STATE:
+		if STATE[key]!=OLDSTATE[key]:
+			changed=True
+			break
+	if changed:
+		print ("stateChanged ... transmitting")
+		jasonstate= json.dumps(STATE)
+		print (str(jasonstate))
+		socketio.emit('stateChanged', (str(jasonstate)), namespace='/rpslobbie')
+		for key in STATE:
+			OLDSTATE[key]=STATE[key]
 
 def getWideIpAdres():
     try:
@@ -54,6 +96,18 @@ def getWideIpAdres():
 #def favicon():
     #return render_template('favicon.png')
 
+def stripName(name):
+	name=name.strip()
+	newname=''
+	counter=0
+	for n in name:
+		if n in allowed:
+			newname=newname+n
+			counter=counter+1
+			if counter==maxnamelen:
+				break
+	return newname
+	
 def GetConnectTo(remote_address):
     if (remote_address==localIP):
         return localIP+':'+str(PORT)
@@ -64,10 +118,12 @@ def GetConnectTo(remote_address):
 
 @app.route('/')
 def app_index():
-    a= render_template('rps.html')
-    a=a.replace('%%CONNECTTO%%',GetConnectTo(request.remote_addr))
-    print (request.remote_addr, '/ --> /rps.html')
-    return a
+	a= render_template('rps.html')
+	a=a.replace('%%CONNECTTO%%',GetConnectTo(request.remote_addr))
+	print (request.remote_addr, '/ --> /rps.html')
+	print ("request.host="+str(request.host))
+	print ("request.user_agent="+str(request.user_agent))
+	return a
 	
 @app.route('/rps')
 def app_rps():
@@ -75,68 +131,164 @@ def app_rps():
     a=a.replace('%%CONNECTTO%%',GetConnectTo(request.remote_addr))
     print (request.remote_addr, '/rps --> /rps.html')
     return a
+	
+@socketio.on('Choice', namespace='/rpslobbie')
+def on_Choice(side, choice):
+	if STATE['gamestate']=='waitingforplayers' or STATE['gamestate']=='gamerunning' or STATE['gamestate']=='showingwinner':
+		if (CLIENTS[request.sid]=='LEFT' and side=='Left') or (CLIENTS[request.sid]=='RIGHT' and side=='Right'):
+			print (side, choice)
+			if choice=='Rock' or choice=='Paper' or choice=='Scissors':
+				if side=='Left':
+					CHOICE['LEFT']=choice
+					STATE['lefthand']='Ready'
+					print ("STATE['righthand']", STATE['righthand'])
+					if STATE['righthand'] in ['pregame' ,'Rock' ,'Paper' ,'Scissors']:
+						STATE['righthand']='Waiting'
+						if STATE['gamestate']=='showingwinner':
+							STATE['rightwon']=0
+							STATE['leftwon']=0
+					print ("STATE['righthand']", STATE['righthand'])
+				elif side=='Right':
+					CHOICE['RIGHT']=choice
+					STATE['righthand']='Ready'
+					print ("STATE['lefthand']", STATE['lefthand'])
+					if STATE['lefthand'] in ['pregame' ,'Rock' ,'Paper' ,'Scissors']:
+						STATE['lefthand']='Waiting'
+						if STATE['gamestate']=='showingwinner':
+							STATE['rightwon']=0
+							STATE['leftwon']=0
+					print ("STATE['lefthand']", STATE['lefthand'])
+				if STATE['lefthand']=='Ready' and STATE['righthand']=='Ready':
+					if STATE['gamestate']=='showingwinner':
+						STATE['result']=''
+					STATE['gamestate']='gamerunning'
+					STATE['lefthand']=CHOICE['LEFT'] 
+					STATE['righthand']=CHOICE['RIGHT']
+					if CHOICE['RIGHT']=='Rock':
+						if CHOICE['LEFT'] =='Scissors':
+							STATE['rightwon']=STATE['rightwon']+1
+							STATE['result']='Scissors < Rock'
+						elif CHOICE['LEFT'] =='Paper':
+							STATE['leftwon']=STATE['leftwon']+1
+							STATE['result']='Paper > Rock'
+						else:
+							STATE['result']='Rock = Rock'
+					if CHOICE['RIGHT']=='Paper':
+						if CHOICE['LEFT'] =='Scissors':
+							STATE['leftwon']=STATE['leftwon']+1
+							STATE['result']='Scissors > Paper'
+						elif CHOICE['LEFT'] =='Rock':
+							STATE['rightwon']=STATE['rightwon']+1
+							STATE['result']='Rock < Paper'
+						else:
+							STATE['result']='Paper = Paper'
+					if CHOICE['RIGHT']=='Scissors':
+						if CHOICE['LEFT'] =='Rock':
+							STATE['leftwon']=STATE['leftwon']+1
+							STATE['result']='Rock > Scissors'
+						elif CHOICE['LEFT'] =='Paper':
+							STATE['rightwon']=STATE['rightwon']+1
+							STATE['result']='Paper < Scissors'
+						else:
+							STATE['result']='Scissors = Scissors'
+				if STATE['rightwon']>=STATE['goalscore']:
+					STATE['gamestate']='showingwinner'
+					STATE['result']=STATE['rightname']+' Wins!!!'
+				elif STATE['leftwon']>=STATE['goalscore']:
+					STATE['gamestate']='showingwinner'
+					STATE['result']=STATE['leftname']+' Wins!!!'
+				checkState()
+	
+@socketio.on('setRightName', namespace='/rpslobbie')
+def on_setRightName(name):
+	if STATE['gamestate']=='waitingforplayers' or STATE['gamestate']=='showingwinner':
+		if CLIENTS[request.sid]=='RIGHT':
+			newname=stripName(name)
+			if len(newname):
+				print (request.sid,'setRightName -->', newname)
+				STATE['rightname']=newname
+				checkState()
+			else:
+				print ('ignoring zero length name')
+			if len(newname)!=len(name):
+				socketio.emit('noGoodName', (request.sid,STATE['rightname'],STATE['leftname']), namespace='/rpslobbie')
+				
 
-@socketio.on('triggerColor', namespace='/colorlobbie')
-def on_triggerColor():
-    try:
-        r,g,b=CLIENTS[request.sid]
-        print (request.sid, 'triggerColor',r,g,b)
-        socketio.emit('newColor', (r,g,b), namespace='/colorlobbie')
-    except:
-        print ('O shit in on_triggerColors')
+@socketio.on('setLeftName', namespace='/rpslobbie')
+def on_setLeftName(name):
+	if STATE['gamestate']=='waitingforplayers' or STATE['gamestate']=='showingwinner':
+		if CLIENTS[request.sid]=='LEFT':
+			newname=stripName(name)
+			if len(newname):
+				print (request.sid,'setLeftName -->', newname)
+				STATE['leftname']=newname
+				checkState()
+			else:
+				print ('ignoring zero length name')
 
-@socketio.on('setColor', namespace='/colorlobbie')
-def on_setColor(r,g,b):
-    CLIENTS[request.sid]=(r,g,b)
-    print (request.sid,'setColor -->', r,g,b)
+@socketio.on('setGoalScore', namespace='/rpslobbie')
+def on_setGoalScore(goalscore):
+	if STATE['gamestate']=='waitingforplayers' or STATE['gamestate']=='showingwinner':
+		if CLIENTS[request.sid]=='RIGHT':
+			if len(goalscore):
+				print (request.sid,'setGoalScore -->', goalscore)
+				try:
+					goalscore=abs(int(goalscore))
+					if goalscore>0:
+						STATE['goalscore']=abs(int(goalscore))
+					else:
+						socketio.emit('noGoodGoalScore', (request.sid,STATE['goalscore']), namespace='/rpslobbie')
+						print (str(goalscore)+' is not a good number')
+				except:
+					socketio.emit('noGoodGoalScore', (request.sid,STATE['goalscore']), namespace='/rpslobbie')
+					print (str(goalscore)+' is not a good number')
+				checkState()
+			else:
+				print ('ignoring zero length goalscore')
+			
+def getSide():
+	needRight=True
+	needLeft=True
+	for c in CLIENTS:
+		if CLIENTS[c]=="RIGHT":
+			needRight=False
+		elif CLIENTS[c]=="LEFT":
+			needLeft=False
+	if needRight:
+		return "RIGHT"
+	elif needLeft:
+		return "LEFT"
+	else:
+		return "OBSERVER"
 
-def get1to255():
-    random.seed()
-    return random.randint(0, 255)
-
-def getFreeColor():
-    needWhite=True
-    needBlack=True
-    for c in CLIENTS:
-        if CLIENTS[c]==(255,255,255):
-            needWhite=False
-        elif CLIENTS[c]==(0,0,0):
-            needBlack=False
-    if needWhite:
-        return (255,255,255)
-    if needBlack:
-        return (0,0,0)
-    r=get1to255()
-    g=get1to255()
-    b=get1to255()
-    print ('getFreeColor',r,g,b)
-    return (r,g,b)
-
-@socketio.on('requestColor', namespace='/colorlobbie')
-def on_requestColor():
+@socketio.on('requestSide', namespace='/rpslobbie')
+def on_requestSide():
     currentSocketId = request.sid
-    r,g,b=CLIENTS[currentSocketId]
-    print('requestColor -->',currentSocketId,r,g,b)
-    socketio.emit('requestedColor', (currentSocketId,r,g,b), namespace='/colorlobbie')
+    side=CLIENTS[currentSocketId]
+    print('requestSide -->',currentSocketId,side)
+    socketio.emit('requestedSide', (currentSocketId,side,json.dumps(STATE)), namespace='/rpslobbie')
 
-@socketio.on('connect', namespace='/colorlobbie')
+@socketio.on('connect', namespace='/rpslobbie')
 def on_connect():
 	print('Client '+request.sid+' connected')
 	currentSocketId = request.sid
-	CLIENTS[currentSocketId]=getFreeColor()
-	print ("request.base_url="+str(request.base_url))
-	print ("request.referrer="+str(request.referrer))
-	print ("request.host="+str(request.host))
-	print ("request.host_url="+str(request.host_url))
-	print ("request.namespace="+str(request.namespace))
-	print ("request.remote_addr="+str(request.remote_addr))
-	print ("request.user_agent="+str(request.user_agent))
+	CLIENTS[currentSocketId]=getSide()
+	if CLIENTS[currentSocketId]=='RIGHT':
+		STATE['righthand']='pregame'
+	elif CLIENTS[currentSocketId]=='LEFT':
+		STATE['lefthand']='pregame'
+	checkState()
 
-@socketio.on('disconnect', namespace='/colorlobbie')
+@socketio.on('disconnect', namespace='/rpslobbie')
 def on_disconnect():
-    print('Client '+request.sid+' disconnected')
-    currentSocketId = request.sid
-    CLIENTS.pop(currentSocketId, None)
+	print('Client '+request.sid+' disconnected')
+	currentSocketId = request.sid
+	if CLIENTS[currentSocketId]=='RIGHT':
+		STATE['righthand']='waitingforconnection'
+	elif CLIENTS[currentSocketId]=='LEFT':
+		STATE['lefthand']='waitingforconnection'
+	CLIENTS.pop(currentSocketId, None)
+	checkState()
 
 if __name__ == '__main__':
 	try:
@@ -147,7 +299,7 @@ if __name__ == '__main__':
 	WANIP=getWideIpAdres()
 	print ()
 	print ("Rock Paper Scissors")
-	print ("v0.01")
+	print ("v0.02")
 	print ("localIP="+localIP)
 	print ("LANIP="+LANIP)
 	print ("WANIP="+WANIP)
